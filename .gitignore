@@ -1,0 +1,19 @@
+# Ignore diary
+diary
+
+# Ignore all autosave files
+*~
+
+# Ignore some data files
+*.csv
+*.avi
+CompleteData_*
+
+# Ignore pictures
+*.png
+*.jpg
+*.tif
+*.tiff
+
+# Ignore others
+*.zip
