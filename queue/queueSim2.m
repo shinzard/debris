@@ -27,9 +27,9 @@ function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
         warmup = 1000;                 % same units as S
     end
     
-    if sum(P) ~= 1 && P ~= 0 && P ~= -1 && P ~= -2
-        error('Probability vector error');
-    end
+    %  if sum(P) ~= 1 && P ~= 0 && P ~= -1 && P ~= -2
+    %        error('Probability vector error');
+    %  end
 
     % simulation variables
     eventList = NaN*zeros(1,sum(N));    % next time for each entity
@@ -48,7 +48,7 @@ function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
                                         % service times
     
     % initialization of entity variables
-    class = zeros(1,sum(N));
+    class = ones(1,sum(N));
     enterTime = zeros(1,sum(N));
     
     if length(N)>1 %P == 0                           % deterministic routing
@@ -66,15 +66,19 @@ function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
 
     location = zeros(1,sum(N));
     
-    for i = 1:length(N)                 % for each class, find
+    if length(N)>1
+        for i = 1:length(N)             % for each class, find
                                         % feasible starting point
-        idx = find(class == i);
-        tmp = mod(find(P(i,:,i,:),1,'first'),size(S,2));
-        if tmp > 0
-            location(idx) = tmp;
-        else
-            location(idx) = size(S,2);
+            idx = find(class == i);
+            tmp = mod(find(P(i,:,i,:),1,'first'),size(S,2));
+            if tmp > 0
+                location(idx) = tmp;
+            else
+                location(idx) = size(S,2);
+            end
         end
+    else
+        location = location + 1;        % start all at first node
     end
 
     % Assign initial positions (1 = at server)
@@ -148,19 +152,18 @@ function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
                 
             else                    % probabilistic
                 tmp = unifrnd(0,1);
-                nextP = P(class(idx),queue,class(idx),:);
+                if length(size(P))>2    % many entity classes
+                                        % (pure, mixed)
+                    nextP = P(class(idx),queue,class(idx),:);
+                else                    % only one class (strict prob)
+                    nextP = P(queue,:);
+                end
                 nextQueue = find(tmp < cumsum(nextP), 1, 'first');
-                %                disp(sprintf('Class: %d; Leaving %d, entering %d\n', ...
-                %                             class(idx),queue,nextQueue));
-                %                input('Next');
+                % disp(sprintf('Class: %d; Leaving %d, entering %d\n', ...
+                %              class(idx),queue,nextQueue));
+                % input('Next');
             end
             
-            %        else                        % deterministic routing
-            %            nextQueue = class(idx) + 1;% these are offset because
-                                       % the central server is '1'
-                                       %        end
-        
-        
         enterTime(idx) = t;
         
         neighbors = find(location == nextQueue);
@@ -177,8 +180,8 @@ function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
                 numServed(nextQueue) = numServed(nextQueue) + 1;
                 tmpWait = (t - enterTime(idx) + nextService);
                 cumWaitTime(nextQueue) = cumWaitTime(nextQueue) + tmpWait;
-                %                waitFilt(nextQueue) = (1-forgetFactor)*waitFilt(nextQueue) ...
-                %                    + forgetFactor*tmpWait;
+                % waitFilt(nextQueue) = (1-forgetFactor)*waitFilt(nextQueue) ...
+                %                       + forgetFactor*tmpWait;
             end
         else                            % get in line
             position(idx) = max(position(neighbors)) + 1;
