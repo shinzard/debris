@@ -7,14 +7,15 @@
 close all;
 clear all;
 
-OPTION = 1;
+OPTION = 5;
 % 1 - new random data w/o delay
 % 2 - new random data w/ delay
 % 3 - new random N, same mus w/o delay (load file below)
 % 4 - same N, mus, w/ random delay (load file below)
+% 5 - same everything, but with M/M/1/K approximation (all others M/M/1)
 
 if OPTION  > 2                          % load data
-    load rand_2_6_20nov2012;
+    load data/rand_2_6_20nov2012;
     
     if OPTION == 3
         entities = zeros(1,NUM_TESTS)*NaN;
@@ -51,6 +52,7 @@ flows = zeros(1,NUM_TESTS*decisionVars);
 travelDelay = zeros(1,NUM_TESTS*decisionVars);
 waitTimes = zeros(1,NUM_TESTS*numStations);
 utilizations = zeros(1,NUM_TESTS*numStations);
+queueLengths = zeros(1,NUM_TESTS*numStations);
 
 figure(1); subplot(311), title('wait times, 1p-2p'), hold on;
 subplot(312), title('wait times, 2p-3p'), hold on;
@@ -86,7 +88,12 @@ for i = 1:NUM_TESTS
     cycleDiff(i) = max(mu(cycles)) - min(mu(cycles));
 
     % Solve
-    [u,w,q,x,flag] = optimalAssignment(mu,type,d,N);
+    if OPTION < 5
+        [u,w,q,x,flag] = optimalAssignment(mu,type,d,N,1);
+    else
+        [u,w,q,x,flag] = optimalAssignment(mu,type,d,N,3);
+    end
+
     
     % Test with proportional routing
     %    [u2,w2,q2,x2] = queueSim(N,mu,);
@@ -105,6 +112,9 @@ for i = 1:NUM_TESTS
     travelDelay((i-1)*decisionVars + 1 : i*decisionVars) = d;
     waitTimes((i-1)*numStations + 1 : i*numStations) = w;
     utilizations((i-1)*numStations + 1 : i*numStations) = u;
+    queueLengths((i-1)*numStations + 1 : i*numStations) = q(1:end-1); ...
+    % ignore travel
+    
     serviceRates((i-1)*numStations + 1 : i*numStations) = mu;
     
 
