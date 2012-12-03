@@ -9,7 +9,7 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
                        'Display', 'iter');
 
     [x,fval, exit, output, lagrange] = ...
-        fmincon(@(x)throughput(x), repmat(0,1,numChains*numCycles), [], ...
+        fmincon(@(x)throughput(x), repmat(0.0001,1,numChains*numCycles), [], ...
                 [], [], [],repmat(0,1,numChains*numCycles),[], ...
                 @(x)numEntities(x,mu,type,d,N,METHOD), options);
     
@@ -34,8 +34,10 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
     %    end
     
     for i=1:numChains
+        % note that for finite-source, this is the *individual*
+        % arrival rate, not the effective one...
         centralFlow(i) = sum(x((i-1)*numCycles + 1:i* ...
-                                    numCycles));
+                               numCycles));
         switch(METHOD)
           case 1,                       % M/M/1
             delta = centralFlow(i)/(mu(chains(i))-centralFlow(i));
@@ -52,12 +54,25 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
                 Lq = N*(N+1)/( 2*(N+1) );
             end
             delta = Lq + rho*(1-pk);
+            
+          case 3,                     % finite source
+            rho = centralFlow(i)/mu(chains(i));
+            a = zeros(1,N);
+            for j = 1:N
+                a(j) = nchoosek(N,j)*factorial(j)*rho^j;
+            end
+            p0 = 1/(1+sum(a));
+            pk = p0*a(end);
+            delta = p0*sum([1:N].*a);
         end
+        
         centralL(i) = delta; %min(max(0,delta), N);
         centralW(i) = centralL(i)/( centralFlow(i)*(1-pk) );
     end
     
     for i = 1:numCycles
+        % note that for finite-source, this is the *individual*
+        % arrival rate, not the effective one...
         cycleFlow(i) = sum(x(i:numCycles:end));
 
         switch(METHOD)
@@ -76,10 +91,26 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
                 Lq = N*(N+1)/( 2*(N+1) );
             end
             delta = Lq + rho*(1-pk);
+
+          case 3,                       % finite-source
+            rho = cycleFlow(i)/mu(cycles(i));
+            a = zeros(1,N);
+            for j = 1:N
+                a(j) = nchoosek(N,j)*factorial(j)*rho^j;
+            end
+            p0 = 1/(1+sum(a));
+            pk = p0*a(end);
+            delta = p0*sum([1:N].*a);
         end
         
         cycleL(i) = delta; %min(max(0,delta), N);
         cycleW(i) = cycleL(i)/( cycleFlow(i)*(1-pk) );
+    end
+
+    % Effective flows for finite source case
+    if METHOD == 3
+        centralFlow = centralFlow.*(N-centralL); 
+        cycleFlow = cycleFlow.*(N-cycleL);
     end
 
     % Outputs
@@ -89,6 +120,9 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
         w = [1./(mu(chains)-centralFlow), 1./(mu(cycles)- ...
                                               cycleFlow)];
       case 2,
+        w = [centralW, cycleW];
+
+      case 3,
         w = [centralW, cycleW];
     end
     q = [centralL, cycleL, travelL];
@@ -106,7 +140,6 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
 
     epsilon = 1e-6;                     % required to ensure
                                         % feasible solutions
-    
     chains = find(type == 1);
     numChains = length(chains);
     cycles = find(type == 2);
@@ -118,13 +151,13 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
     centralL = 0;
     cycleL = 0;
     travelL = sum(lambda.*d);
-    
+
     for i=1:numChains
         centralFlow(i) = sum(lambda((i-1)*numCycles + 1:i* ...
                                     numCycles));
         switch(METHOD)
           case 1,                       % M/M/1
-            delta = centralFlow(i)/(mu(chains(i))-centralFlow(i));
+            delta = centralFlow(i)/(mu(chains(i))-centralFlow(i))
             pk = 0;
             
           case 2,                       % M/M/1/N
@@ -138,10 +171,20 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
                 Lq = N*(N+1)/( 2*(N+1) );
             end
             delta = Lq + rho*(1-pk);
+
+          case 3,                       % finite-source
+            rho = centralFlow(i)/mu(chains(i));
+            a = zeros(1,N);
+            for j = 1:N
+                a(j) = nchoosek(N,j)*factorial(j)*rho^j;
+            end
+            p0 = 1/(1+sum(a));
+            delta = p0*sum([1:N].*a);
         end
         centralL = centralL + delta; %min(max(0,delta), N);
     end
     
+
     for i = 1:numCycles
         cycleFlow(i) = sum(lambda(i:numCycles:end));
 
@@ -161,6 +204,15 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
                 Lq = N*(N+1)/( 2*(N+1) );
             end
             delta = Lq + rho*(1-pk);
+
+          case 3,                       % finite-source
+            rho = cycleFlow(i)/mu(cycles(i));
+            a = zeros(1,N);
+            for j = 1:N
+                a(j) = nchoosek(N,j)*factorial(j)*rho^j;
+            end
+            p0 = 1/(1+sum(a));
+            delta = p0*sum([1:N].*a);
         end
         
         cycleL = cycleL + delta; %min(max(0,delta), N);
