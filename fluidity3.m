@@ -1,5 +1,5 @@
 function [effectiveness, efficiency, equality, sizeF, fluidF, haul, teamHist, dayF] ...
-        = fluidity3(dayData,trucks,qcSpan,loadTime,truckId,subcont, ...
+        = fluidity3(dayData,trucks,loadTime,truckId,subcont, ...
                    loadVolume,outData,QC, capacity, dayService, ...
                    VERB,filename,duration,PLOT,towerTime, lat, lon, ...
                     loadPercent, haulMi)
@@ -18,16 +18,19 @@ d = collapseV(dayData, 'day');
 % 2 June 2012....restrict to same region
 days = duration;
 
-%%%%%for i = 1:length(days)
-%%%%%    idx = find(d == days(i));
-%%%%%    disp(sprintf('Day: %d, NumTrucks: %d', days(i), length(idx)));
-%%%%%    fluid(i) = length(find(t(idx)<1))/length(idx);
-%%%%%end
+% Generate overview plots for SMC paper (12 March 2013)
+if PLOT
+    for i = 1:length(days)
+        idx = find(d == days(i));
+        disp(sprintf('Day: %d, NumTrucks: %d', days(i), length(idx)));
+        fluid(i) = length(find(t(idx)<1))/length(idx);
+    end
 
-%figure, plot(fluid(1:end-1))
-%xlabel('Days')
-%ylabel('Percentage')
-%title('Fluidity: Percentage of Trucks Switching DRT')
+    figure, plot(fluid(1:end-1))
+    xlabel('Days')
+    ylabel('Percentage')
+    title('Fluidity: Percentage of Trucks Switching DRT')
+end
 
 % Look at number of changes
 %%%%%change = zeros(1, length(trucks));
@@ -606,9 +609,9 @@ plot(teamPerfEcy(idx), 'r.');
 plot(teamPerfEq(idx)*100000, 'g.');
 legend({'Effectiveness', 'Efficiency', 'Equality'});
 
-teamPerfEcy(idx(bad))
-teamPerfEff(idx(bad))
-teamPerfEq(idx(bad))
+teamPerfEcy(idx(bad));
+teamPerfEff(idx(bad));
+teamPerfEq(idx(bad));
 
 disp(sprintf('Good Ratio: %2.2f', length(good)/length(idx)));
 

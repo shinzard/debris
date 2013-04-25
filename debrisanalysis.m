@@ -64,9 +64,12 @@ if CLEAN
     
     for i = 3:length(filename)
         try
-            [data,txt] = xlsread([directory, '/', filename(i).name]);
+            [data,txt] = xlsread([directory, '/', ...
+                                filename(i).name]);
+            disp('excel');
         catch
             data = csvread([directory, '/', filename(i).name]);
+            disp('csv');
         end
         %data = xlsread(filename(i),1,0);
         
@@ -151,6 +154,7 @@ if CLEAN
                 projectT = data(good, 1);
                 try
                     fileT = data(good, 18);
+                    disp('file data');
                 catch
                     disp('no file data');
                 end
@@ -159,7 +163,7 @@ if CLEAN
                 % debris
                 
                 try
-                good = good(find(haulMiT > 0 & ...
+                    good = good(find(haulMiT > 0 & ...
                     fileT > 28 & ... % non-MATOC ROW only
                     floor(projectT) ~= 37 & ... % MATOC PPDR
                     projectT ~= 34 & ... % loose stumps
@@ -170,8 +174,10 @@ if CLEAN
                     ~strcmp(contentsT, 'Material') & ...  % No idea what these are (very few)
                     ~strcmp(contentsT, 'MUL') & ...  % Mulch loads
                     ~strcmp(contentsT, 'ASH')));  % Ash loads
+                    disp('large set of restrictions');
                 catch
-                good = good(find(haulMiT > 0 & contentsT < 3));
+                    good = good(find(haulMiT > 0 & contentsT < 3));
+                    disp('small set of restrictions');
                 end
                     
                 disp(sprintf('Data Good: %d', length(good)));
@@ -210,10 +216,12 @@ if CLEAN
                 file = [file; data(good, 18)];
                 invoice = [invoice; data(good, 19)];
                 subInvoice = [subInvoice; data(good, 20)];
+                disp('large set of data');
             catch
                 contents = [contents; data(good, 15)];
                 subcont = [subcont; data(good, 16)];
                 subcont2 = [subcont2; data(good, 17)];
+                disp('small set of data');
             end
         end
         disp(sprintf('File: %s -- Percent Data Kept: %2.2f%%', ...

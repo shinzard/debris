@@ -7,15 +7,15 @@
 close all;
 clear all;
 
-OPTION = 5;
+OPTION = 2;
 % 1 - new random data w/o delay
 % 2 - new random data w/ delay
 % 3 - new random N, same mus w/o delay (load file below)
 % 4 - same N, mus, w/ random delay (load file below)
-% 5 - same everything, but with M/M/1/K approximation (all others M/M/1)
+% 5 - same everything, but with new approximation method (all others M/M/1)
 
 if OPTION  > 2                          % load data
-    load data/rand_2_6_20nov2012;
+    load data/rand_2_6_20nov2012_fewerN;
     
     if OPTION == 3
         entities = zeros(1,NUM_TESTS)*NaN;
@@ -46,6 +46,7 @@ partition = zeros(1,NUM_TESTS)*NaN;
 throughput = zeros(1,NUM_TESTS)*NaN;
 centralCapacity = zeros(1,NUM_TESTS)*NaN;
 cycleCapacity = zeros(1,NUM_TESTS)*NaN;
+exitFlags = zeros(1,NUM_TESTS)*NaN;
 
 % Raw data
 flows = zeros(1,NUM_TESTS*decisionVars);
@@ -90,6 +91,12 @@ for i = 1:NUM_TESTS
     % Solve
     if OPTION < 5
         [u,w,q,x,flag] = optimalAssignment(mu,type,d,N,1);
+        [Nvec, p] = routing(type, mu, d, x, N, 1);
+        figure(100), plot(Nvec,x./Nvec, 'b.'), hold on;
+        title('Individual flow by team size');
+        figure(101), plot(mu,x./Nvec, 'b.'), hold on;
+        title('Individual flow by loading rate');
+        
     else
         [u,w,q,x,flag] = optimalAssignment(mu,type,d,N,3);
     end
@@ -113,6 +120,8 @@ for i = 1:NUM_TESTS
     waitTimes((i-1)*numStations + 1 : i*numStations) = w;
     utilizations((i-1)*numStations + 1 : i*numStations) = u;
     queueLengths((i-1)*numStations + 1 : i*numStations) = q(1:end-1); ...
+    exitFlags(i) = flag;
+    
     % ignore travel
     
     serviceRates((i-1)*numStations + 1 : i*numStations) = mu;

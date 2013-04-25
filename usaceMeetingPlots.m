@@ -1,4 +1,5 @@
-load DEBRIS_ANALYSIS_AL
+% load DEBRIS_ANALYSIS_AL % contains duplicates...
+load DEBRIS_AL_COMPLETE
 
 figure, boxplot(loadPercent, floor(loadTime)-min(floor(loadTime)), 'plotstyle', 'compact', 'labelorientation', 'horizontal')
 title('Boxplot of Load Percent Data by Day')
@@ -23,6 +24,9 @@ for i = 1:length(duration)
 end
 plot(duration-duration(1), medpf)
 
+subs = unique(subcont);
+subcont = match(subs,subcont);
+
 struc = groupId(truckId, QC, loadTime, subcont, haulMi, ...
 0.9, 1);
 
@@ -33,7 +37,6 @@ title('Histogram of Daily Crew Size')
 
 %set(gca, 'TickDir', 'in')
 
-subs = unique(subcont);
 
 subSize = zeros(1,29); 
 for i = 1:29

@@ -5,8 +5,8 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
     cycles = find(type == 2);
     numCycles = length(cycles);
     
-    options = optimset('Algorithm', 'interior-point', 'TolX', 1e-12, ...
-                       'Display', 'iter');
+    options = optimset('Algorithm', 'interior-point', 'TolX', 1e-12); %, ...
+                       %'Display', 'iter');
 
     [x,fval, exit, output, lagrange] = ...
         fmincon(@(x)throughput(x), repmat(0.0001,1,numChains*numCycles), [], ...
@@ -157,7 +157,7 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
                                     numCycles));
         switch(METHOD)
           case 1,                       % M/M/1
-            delta = centralFlow(i)/(mu(chains(i))-centralFlow(i))
+            delta = centralFlow(i)/(mu(chains(i))-centralFlow(i));
             pk = 0;
             
           case 2,                       % M/M/1/N

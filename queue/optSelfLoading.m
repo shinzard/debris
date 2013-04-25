@@ -8,7 +8,7 @@
 close all;
 clear all;
 pRange = [0:0.01:1];
-
+MOVIE = 0;
 L_RANGE = [1:30];                       % incoming rate (per hour)
 C = 3;                                  % number of simulataneous
                                         % self-loading spots
@@ -64,7 +64,9 @@ for mu_s = mu1range
     i = i + 1;
 end
 
-aviobj = avifile('tdsrOptSL.avi', 'FPS', 1);
+if MOVIE
+    aviobj = avifile('tdsrOptSL.avi', 'FPS', 1);
+end
 
 for i = 1:length(L_RANGE)
     figure, surfc(mu2range,mu1range,prop(:,:,i))
@@ -73,13 +75,18 @@ for i = 1:length(L_RANGE)
     ylabel('Self-Unloading Rate (trucks/hr)');
     zlabel('Optimal Proportion of Self-Load');
     axis([0,max(mu2range),0,max(mu1range),0,1]);
-    F = getframe(gcf);
-    aviobj = addframe(aviobj,F);
+    %    print('-deps', sprintf('graphics/optSelf/prop%d.eps', i));
+    if MOVIE
+        F = getframe(gcf);
+        aviobj = addframe(aviobj,F);
+    end
 end
 
-aviobj = close(aviobj);
+if MOVIE
+    aviobj = close(aviobj);
 
-aviobj = avifile('tdsrOptSL_EQ.avi', 'FPS', 1);
+    aviobj = avifile('tdsrOptSL_EQ.avi', 'FPS', 1);
+end
 
 for i = 1:length(L_RANGE)
     figure, surfc(mu2range,mu1range,equality(:,:,i))
@@ -88,11 +95,16 @@ for i = 1:length(L_RANGE)
     ylabel('Self-Unloading Rate (trucks/hr)');
     zlabel('Optimal Proportion of Self-Load');
     axis([0,max(mu2range),0,max(mu1range),0,5]);
-    F = getframe(gcf);
-    aviobj = addframe(aviobj,F);
+    %    print('-deps', sprintf('graphics/optSelf/equal%d.eps', i));
+    if MOVIE
+        F = getframe(gcf);
+        aviobj = addframe(aviobj,F);
+    end
 end
 
-aviobj = close(aviobj);
+if MOVIE
+    aviobj = close(aviobj);
+end
 
 
 for i = [1:max(mu1range)]
@@ -103,4 +115,5 @@ for i = [1:max(mu1range)]
         ylabel('Optimal Proportion of Self-Load');
     end
     title(sprintf('Self-loader rate: %d', mu1range(i)));
+    %    print('-deps', sprintf('graphics/optSelf/flat%d.eps', i));
 end

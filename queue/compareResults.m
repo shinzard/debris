@@ -8,8 +8,12 @@ more off;
 %load rand_2_6_20nov2012
 %load rand_2_6_20nov2012_sim
 
-load rand_2_6_20nov2012_fewerN
-load rand_2_6_20nov2012_sim_fewerN
+%load data/rand_2_6_20nov2012_fewerN
+%load data/rand_2_6_20nov2012_sim_fewerN
+
+
+load data/rand_2_6_20nov2012_mm1k
+load data/rand_2_6_20nov2012_sim_mm1k
 
 %type = [1 1 2 2 2 2 2 2]; IN MAT FILE
 %NUM_TESTS = 100; IN MAT FILE

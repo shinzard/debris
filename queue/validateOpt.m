@@ -5,11 +5,11 @@ clear all;
 more off;
 
 % These need to match the generated data from optimalAssignment
-%load data/rand_2_6_20nov2012_mm1k
-%METHOD = 2;
+load data/rand_2_6_20nov2012_fewerN_mm1k
+METHOD = 2;
 
-load data/rand_2_6_20nov2012_finiteSource
-METHOD = 3;
+%load data/rand_2_6_20nov2012_fewerN_finiteSource
+%METHOD = 3;
 
 %load data/rand_2_6_20nov2012
 %METHOD = 1;
@@ -203,7 +203,9 @@ for i = 1:NUM_TESTS
 
     % for finite source only!!! (not sure why doesn't work when use
     % cycles instad of centrals...)
-    f = sum(centralFlow.*(N-centralL));
+    if METHOD == 3
+        f = sum(centralFlow.*(N-centralL));
+    end
     
     disp(sprintf('%d \t %2.2f \t %2.2f \t %2.2f', i, min(sum(mus(chains)), ...
                                                     sum(mus(cycles))), ...
