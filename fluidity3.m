@@ -1,8 +1,7 @@
-function [effectiveness, efficiency, equality, sizeF, fluidF, haul, teamHist, dayF] ...
-        = fluidity3(dayData,trucks,loadTime,truckId,subcont, ...
-                   loadVolume,outData,QC, capacity, dayService, ...
-                   VERB,filename,duration,PLOT,towerTime, lat, lon, ...
-                    loadPercent, haulMi)
+function fData = fluidity3(dayData,trucks,loadTime,truckId,subcont, ...
+                           loadVolume,outData,QC, capacity, dayService, ...
+                           VERB,filename,duration,PLOT,towerTime, lat, lon, ...
+                           loadPercent, haulMi, CHECK)
 % Run debrisanalysis, generateQcData
 disp('Running fluidity code');
 %PLOT = 1;
@@ -67,6 +66,7 @@ teamPerfEcyNEW = zeros(1,length(teams));
 teamPerfEcy = zeros(1,length(teams)); 
 teamPerfEff = zeros(1,length(teams)); 
 teamPerfEq = zeros(1,length(teams)); 
+teamIdxV = zeros(1,length(teams)); 
 teamHaul = zeros(1,length(teams)); 
 teamCapacity = zeros(1,length(teams)); 
 teamContractors = zeros(1,length(teams));
@@ -395,7 +395,8 @@ for i = 1:length(teams)
     catch % this shouldn't happen anymore (30 July 2012)
         teamPerfEq(i) = NaN;
     end
-    
+
+    teamIdxV(i) = eqDataTeamIdx;
 
 end
 
@@ -445,6 +446,8 @@ for i = 1:length(days)
                  (teamHaul(teamIdx) >= 30) | ...
                  (anyInvalidTimes(teamIdx))| ... % Added 6 aug 2012
                  (anyInvalidCap(teamIdx)) ) % added 13 aug 2012
+
+                %teamHist(teamIdx) = teamCumHistory/((n*(n-1))/2);
                 teamHist(teamIdx) = NaN;
                 teamDay(teamIdx) = NaN; % to prevent single data points
                                         % from messing up the analysis
@@ -615,17 +618,35 @@ teamPerfEq(idx(bad));
 
 disp(sprintf('Good Ratio: %2.2f', length(good)/length(idx)));
 
+if CHECK
+    effectiveness = log10(teamPerfEff(idx(good)));
+    efficiency = log10(teamPerfEcy(idx(good)));
+    equality = log10(teamPerfEq(idx(good))*100000); % per 100k cubic
+                                                % yards
+    teamIdxV = teamIdxV(idx(good));
 
-effectiveness = log10(teamPerfEff(idx(good)));
-efficiency = log10(teamPerfEcy(idx(good)));
-equality = log10(teamPerfEq(idx(good))*100000); % per 100k cubic yards
+    %fluidF = teamHist2(idx(good));
+    fluidF = teamHist(idx(good));
+    sizeF = teamSize(idx(good));
+    haul = teamHaul(idx(good));
+    dayF = teamDay(idx(good))-days(1)+1;
+    teamHist = teamHist(idx(good));
+    teamCapacity = teamCapacity(idx(good));
+else
+    effectiveness = log10(teamPerfEff);
+    efficiency = log10(teamPerfEcy);
+    equality = log10(teamPerfEq*100000); % per 100k cubic
+                                                % yards
+    teamIdxV = teamIdxV;
 
-%fluidF = teamHist2(idx(good));
-fluidF = teamHist(idx(good));
-sizeF = teamSize(idx(good));
-haul = teamHaul(idx(good));
-dayF = teamDay(idx(good))-days(1)+1;
-teamHist = teamHist(idx(good));
+    %fluidF = teamHist2;
+    fluidF = teamHist;
+    sizeF = teamSize;
+    haul = teamHaul;
+    dayF = teamDay-days(1)+1;
+    teamHist = teamHist;
+    
+end
 
 % Scale familiarity (working history) to number of days in mission
 % 28 July 2012: Should we scale this?? (USED TO BE CALLED TEAMHIST2)
@@ -687,7 +708,10 @@ if VERB
     [h,p] = lillietest(effectiveness(find(sizeCode==1&fluidCode==1)))
 end
 
-csvwrite(filename, [effectiveness', efficiency', equality', teamCapacity(idx(good))', sizeF', fluidF', haul',dayF']);
+if ~isempty(filename)
+    csvwrite(filename, [effectiveness', efficiency', equality', ...
+                        teamCapacity', sizeF', fluidF', haul',dayF']);
+end
 
 disp(sprintf(['Teams with at least one truck with invalid time ' ...
               'sequence: %d'], invalidTime));
@@ -701,3 +725,15 @@ disp(sprintf('Of these, %d, have >2 invalid tickets', ...
 disp(sprintf('Corrected perfLs: %d', perflCorrected));
 %teamContractors
 %teamMaxTruck
+
+fData.effectiveness = effectiveness;
+fData.efficiency = efficiency;
+fData.equality = equality;
+fData.sizeF = sizeF;
+fData.familiarityF = fluidF;            % careful...
+fData.fluidF = 1 - fluidF;
+fData.haul = haul;
+fData.teamHist = teamHist;
+fData.dayF = dayF;
+fData.capacity = teamCapacity;
+fData.teamIdx = teamIdxV;
