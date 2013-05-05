@@ -3,7 +3,7 @@
 % 19 March 2013
 % J.Brooks
 function decisionsStruc = decisions(QC, towerTime, loadTime, lat, lon, ...
-                            truckId, haulMi, subcont, duration, PLOT, figIdx)
+                            truckId, haulMi, subcont, duration, PLOT, figIdx,teams,tdsr)
 
 km2mi = 0.621371;
 
@@ -12,6 +12,9 @@ lonMax = -85.4;
 latMin = 32.22;
 latMax = 35;
 
+tdsrs = sort(unique(tdsr))             % NOTE: ORDER IMPORTANT!
+numTdsrs = length(tdsrs);
+
 % handle cell string subs
 subcont = match(unique(subcont),subcont,999);
 
@@ -19,11 +22,16 @@ dayCount = length(duration);
 
 % team identifier
 QCday = QC + 1e6*floor(loadTime);
-teams = unique(QCday);
-teamDelay = NaN*zeros(1, length(teams));
+%teams = unique(QCday);
+teamDelay = NaN*zeros(numTdsrs, length(teams));
 teamHaul = NaN*zeros(1,length(teams));
 teamLat = NaN*zeros(1,length(teams));
 teamLon = NaN*zeros(1,length(teams));
+teamDay = NaN*zeros(1,length(teams));
+teamSize = NaN*zeros(1,length(teams));
+teamID = NaN*zeros(1,length(teams));
+teamTravel = NaN*zeros(numTdsrs,length(teams));
+teamTdsrProb = NaN*zeros(numTdsrs,length(teams));
 
 disp(sprintf('Num unique QCdays: %d', length(teams)));
 
@@ -43,19 +51,32 @@ for i = 1:length(duration)
         teamData = find(QCday(todayData) == j);
         idx = todayData(teamData);
         teamtrucks = unique(truckId(idx));
-        teamMean = NaN.*zeros(1,length(teamtrucks));
+        teamMean = NaN.*zeros(numTdsrs,length(teamtrucks));
+        teamTMean = NaN.*zeros(numTdsrs,length(teamtrucks));
         truckCnt = 1;
         
         for k = teamtrucks'
             % Ticket data for truck k on day i for team j
             idx2 = idx(find(truckId(idx) == k));
             
+            for l = 1:numTdsrs
+                tmp = find(tdsr(idx2)==tdsrs(l));
+                teamTMean(l,truckCnt) = median(towerTime(idx2(tmp))- ...
+                                               loadTime(idx2(tmp)))*24;
+            end
+            
             if length(idx2) > 1
-                teamMean(truckCnt) = median(diff(sort(loadTime(idx2))))*24; 
-                % NOTE: in hrs
-                % switched to median 1/23/2013
+                loops = diff(sort(loadTime(idx2)))*24;
+                tdsrIdx = match(tdsrs,tdsr(idx2(1:end-1)));
+                for l = 1:numTdsrs
+                    tmp = find(tdsrIdx == l);
+                    teamMean(l,truckCnt) = median(loops(tmp));
+                    % NOTE: in hrs
+                    % switched to median 1/23/2013
+                end
             end
             truckCnt = truckCnt + 1;
+            
         end
 
         % FOR DEBUGGING...
@@ -64,12 +85,23 @@ for i = 1:length(duration)
         teamIdx = find(teams == j);
         %        title(teamIdx);
 
-        teamDelay(teamIdx) = nanmedian(teamMean); % switched from
+        teamDelay(:,teamIdx) = nanmedian(teamMean,2); % switched from
                                                   % mean to median 1/23/2013
+        teamTravel(:,teamIdx) = nanmedian(teamTMean,2);
         teamHaul(teamIdx) = mean(haulMi(idx));
         teamSize(teamIdx) = length(teamtrucks);
         teamLat(teamIdx) = mean(lat(idx));
         teamLon(teamIdx) = mean(lon(idx));
+        teamDay(teamIdx) = duration(i);
+        teamSize(teamIdx) = length(teamtrucks);
+        teamID(teamIdx) = j;
+
+        % NOTE: THIS WILL NOT WORK WITH NON-CONTIGUOUS TDSRS...(but
+        % OK for proj.6-7 data...)
+        for l = 1:numTdsrs
+            teamTdsrProb(l,teamIdx) = length(find(tdsr(idx)==tdsrs(l))); 
+        end
+
         
         %figure, plot(lat(teamData),lon(teamData), 'b.');
         %hold on;
@@ -83,7 +115,7 @@ for i = 1:length(duration)
             floor(loadTime(teamData))
         end
     end
-    
+
     if PLOT
         figure(figIdx+1), scatter(i + 0.5*rand(1,length(todaysTeams)), ...
                            teamDelay(match(teams, todaysTeams)), 20, ...
@@ -187,8 +219,8 @@ for i = 1:length(duration)
             decisionsStruc.truck(decisions) = j;
             
             if PLOT
-                figure(figIdx+3), plot(teamDelay(first), ...
-                                teamDelay(second), 'b.');
+                figure(figIdx+3), plot(teamDelay(:,first), ...
+                                teamDelay(:,second), 'b.');
                 figure(figIdx+4), plot(teamHaul(first), ...
                                 teamHaul(second), 'b.');
                 figure(figIdx+5), plot(teamSize(first)+0.6*rand-0.3, ...
@@ -202,7 +234,7 @@ for i = 1:length(duration)
                                                     teamLon(second))*km2mi;
             distanceMoved = [distanceMoved, decisionsStruc.distanceMoved(decisions)];
 
-            if teamDelay(second) < teamDelay(first)
+            if nanmean(teamDelay(:,second)) < nanmean(teamDelay(:,first))
                 roundTripBetter = roundTripBetter + 1;
                 timeTmp = 1;
                 anyTmp = 1;
@@ -256,18 +288,28 @@ disp(sprintf('Any of above: %2.2f', anyBetter/decisions*100));
 
 %idx = find(sum(betterCont,2)>50);      % average >5
  
- idx = find(all(betterCont' > 2));      % strict interpretation
+idx = find(all(betterCont' > 2));      % strict interpretation
  
- percCont = zeros(length(idx),8);
- cnt = 1;
- for i = idx
-     percCont(cnt,:) = betterCont(i,:)./sum(betterCont(i,:));
-     cnt = cnt + 1;
- end
+percCont = zeros(length(idx),8);
+cnt = 1;
+for i = idx
+    percCont(cnt,:) = betterCont(i,:)./sum(betterCont(i,:));
+    cnt = cnt + 1;
+end
+
+figure, bar(percCont', 1)
+title('Decision Category Histogram');
+ylabel('Percent of Decisions');
+xlabel('Category');
  
- figure, bar(percCont', 1)
- title('Decision Category Histogram');
- ylabel('Percent of Decisions');
- xlabel('Category');
- 
- 
+decisionsStruc.teamDelay = teamDelay;
+decisionsStruc.teamHaul = teamHaul;
+decisionsStruc.teamLat = teamLat;
+decisionsStruc.teamLon = teamLon;
+%decisionsStruc.better = better; % just totals
+decisionsStruc.teams = teams;
+decisionsStruc.teamDay = teamDay;
+decisionsStruc.teamSize = teamSize;
+decisionsStruc.teamID = teamID;
+decisionsStruc.teamTravel = teamTravel;
+decisionsStruc.teamTdsrProb = teamTdsrProb;
