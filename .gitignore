@@ -8,12 +8,18 @@ diary
 *.csv
 *.avi
 CompleteData_*
+*.mat
+queue/data
 
 # Ignore pictures
 *.png
 *.jpg
 *.tif
 *.tiff
+*.eps
+queue/graphics
 
 # Ignore others
 *.zip
+*.txt
+
