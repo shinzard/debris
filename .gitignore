@@ -22,4 +22,6 @@ queue/graphics
 # Ignore others
 *.zip
 *.txt
-
+*.log
+*.pdf
+*.fig
