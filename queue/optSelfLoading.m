@@ -10,7 +10,7 @@ clear all;
 pRange = [0:0.01:1];
 MOVIE = 0;
 L_RANGE = [1:30];                       % incoming rate (per hour)
-C = 3;                                  % number of simulataneous
+C = 5;                                  % number of simulataneous
                                         % self-loading spots
 mu1range = [1:10];                      % service rate of self-loaders
 mu2range = [1:20];                      % service rate of chipper
@@ -19,6 +19,7 @@ mu2range = [1:20];                      % service rate of chipper
 %mu2range = 10
 prop = NaN*zeros(length(mu1range),length(mu2range),length(L_RANGE));
 equality =NaN*zeros(length(mu1range),length(mu2range),length(L_RANGE));
+waitTime = NaN*zeros(length(mu1range),length(mu2range),length(L_RANGE));
 
 i = 1;
 
@@ -56,7 +57,9 @@ for mu_s = mu1range
             [minWait, idxT] = min(wait(stable));
 
             prop(i,j,idx) = pRange(stable(idxT));
-            equality(i,j,idx) = waitC(stable(idxT))/waitS(stable(idxT));
+            equality(i,j,idx) = waitC(stable(idxT))/ ...
+                waitS(stable(idxT));
+            waitTime(i,j,idx) = wait(stable(idxT));
             idx = idx + 1;
         end
         j = j + 1;
@@ -100,6 +103,15 @@ for i = 1:length(L_RANGE)
         F = getframe(gcf);
         aviobj = addframe(aviobj,F);
     end
+    
+    % extract linear fit (unity contour)
+    tmp = contourc(mu2range,mu1range,equality(:,:,i),[1 1]);
+    [x,y]=fit(tmp(1,2:end)',tmp(2,2:end)','poly1');
+    disp(sprintf('lambda: %d \t %2.3f \t %2.3f \t %2.3f', L_RANGE(i), x.p1, ...
+                 x.p2, y.rsquare));
+    figure(100), plot(tmp(1,2:end),tmp(2,2:end), 'b');
+    hold on;
+
 end
 
 if MOVIE

@@ -20,7 +20,7 @@
 % J.Brooks
 function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
 
-    forgetFactor = 0.9;
+%    forgetFactor = 0.9;
     
     if nargin < 5
         T = 5000;                      % same units as S
@@ -38,7 +38,7 @@ function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
 
     % initialization of server metrics
     numStations = size(S,2);
-    busy = zeros(1,numStations);          % busy counter for each
+    busy = zeros(1,numStations);        % busy counter for each
                                         % server
     numServed = zeros(1,numStations);
     cumWaitTime = zeros(1,numStations);
@@ -59,6 +59,15 @@ function [u,w,q,x] = queueSim2(N, S, P, T, warmup)
             class(tmp:tmp + N(i)-1) = repmat(classType, 1, N(i));
             classType = classType + 1;
             tmp = tmp + N(i);
+        end
+        
+        if P == 0                       % create deterministic
+                                        % routing matrix
+            P = zeros(length(N),numStations,length(N),numStations);
+            for i = 1:length(N)
+                P(i,1,i,i+1) = 1;
+                P(i,i+1,i,1) = 1;
+            end
         end
     end
 

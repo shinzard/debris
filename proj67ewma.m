@@ -2,7 +2,7 @@ close all;
 clear all;
 
 PLOT = 0;
-LOOP = 1;                               % 1 - use loop times
+LOOP = false;                               % 1 - use loop times
                                         % 0 - use travel times
 load DEBRIS_AL_COMPLETE
 
@@ -38,7 +38,7 @@ drts = unique(drt);%eqData.QCDay;
 trucks = unique(truckId);
 
 % initialize variables
-alphas = 0.9; %linspace(0.001, 0.999); %[0.1, 0.5, 0.9];
+alphas = 0.94; %linspace(0.001, 0.999); %[0.1, 0.5, 0.9];
 betterCounter = zeros(1,length(alphas));% metric for choosing
                                         % alpha; higher is better!
 worseCounter = zeros(1,length(alphas));         
@@ -326,20 +326,10 @@ cnt2 = cnt2 + 1;
 end
 
 figure; 
-plot(alphas, betterCounter, 'b.');
-hold on;
-plot(alphas, worseCounter, 'r.');
-title('Time');
+plot(alphas, betterCounter./(betterCounter + worseCounter), 'b.');
+title('Proportion of Rational Decisions by EWMA Factor');
 xlabel('Forgetting Factor');
-legend({'Successful Decisions', 'Not'});
-
-figure; 
-plot(alphas, betterSizeCounter, 'b.');
-hold on;
-plot(alphas, worseSizeCounter, 'r.');
-title('Size');
-xlabel('Forgetting Factor');
-legend({'Successful Decisions', 'Not'});
+ylabel('Proportion');
 
 placefigures;
 
@@ -359,6 +349,11 @@ timeDiff(timeDiff>1) = NaN;
 figure, hist(timeDiff*24);
 title('Inter-Decision Times')
 xlabel('Hours');
+
+[obs,y] = hist(timeDiff*24)
+edges=cumsum(repmat(y(2)-y(1),10,1));
+expected = sum(x)*(1-expcdf(edges,0.44));
+chisq = sum((obs'-expected).^2./expected);
 
 figure, stem([-20:20], xcorr(timeDiff(find(~isnan(timeDiff))),20,'coeff'))
 title('Autocorrelation of time differences');
