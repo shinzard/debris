@@ -1,7 +1,7 @@
 close all;
 clear all;
 
-PLOT = 0;
+PLOT = 1;
 LOOP = false;                               % 1 - use loop times
                                         % 0 - use travel times
 load DEBRIS_AL_COMPLETE
@@ -352,7 +352,7 @@ xlabel('Hours');
 
 [obs,y] = hist(timeDiff*24)
 edges=cumsum(repmat(y(2)-y(1),10,1));
-expected = sum(x)*(1-expcdf(edges,0.44));
+expected = sum(y)*(1-expcdf(edges,0.44));
 chisq = sum((obs'-expected).^2./expected);
 
 figure, stem([-20:20], xcorr(timeDiff(find(~isnan(timeDiff))),20,'coeff'))
