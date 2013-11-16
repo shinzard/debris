@@ -36,6 +36,8 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
     % simulation variables
     eventList = NaN*zeros(1,sum(N) + 1);% next time for each entity
                                         % + dispatcher
+    eventType = NaN.*zeros(1,sum(N)+1); % 1 == service, 2 ==
+                                        % travel, 3 == dispatch
     t = 0;                              % current simulation time
     lastT = 0;                          % last sim. time
     cumHist = zeros(sum(N),sum(N));
@@ -46,12 +48,11 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
     numCentral = length(find(type==1));
     busy = zeros(1,numStations);        % busy counter for each
                                         % server
-
     % Team attribute vectors
     teamFam = zeros(1,numStations-numCentral);
     teamSize = zeros(1,numStations-numCentral);
 
-
+    % Allocate metrics, filter variables
     numServed = zeros(1,numStations);
     cumWaitTime = zeros(1,numStations);
     cumLength = zeros(1,numStations);
@@ -85,14 +86,17 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
                 end
             end
             
-            %            reshape(P(1,:,1,:),8,8)
-
+            if DEBUG
+                reshape(P(1,:,1,:),8,8)
+            end
 
         end
     end
 
-    %P = cumsum(P);                      % to use with unif random number
-    location = zeros(1,sum(N));
+    location = NaN.*zeros(1,sum(N));    % queue ID
+    destination = NaN.*zeros(1,sum(N)); % vector to store
+                                        % destination for
+                                        % travelling entities
 
     if length(N)>1
         for i = 1:length(N)             % for each class, find
@@ -106,7 +110,7 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
             end
         end
     else
-        location = location + 1;        % start all at first node
+        location = ones(1,sum(N));        % start all at first node
     end
 
     % Assign initial positions (1 = at server)
@@ -120,11 +124,13 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
     idx = find(position == 1);
     for i = 1:length(idx)
         eventList(idx(i)) = exprnd(1/S(location(idx(i))));
+        eventType(idx(i)) = 1;
     end
     
     % First dispatcher decision
     eventList(end) = exprnd(dispatchParams.inter);
-    
+    eventType(end) = 3;
+
     % ----------------------------------------
     % RUN SIMULATION
     % ----------------------------------------
@@ -152,95 +158,120 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
 
             % Set next dispatcher decision
             eventList(end) = t + exprnd(1/dispatchParams.inter);
+            eventType(end) = 3;
             continue;
         end
         
         % For debuggins....
-        if idx == 2 && DEBUG
-            disp(sprintf('t = %2.2f; location: %d; pos: %d, class: %d',t, location(idx), ...
+        if idx == 24 && DEBUG
+            disp(sprintf('t = %2.2f; type: %d; dest: %d; location: %d; pos: %d, class: %d',t, eventType(idx), destination(idx), location(idx), ... 
                          position(idx), class(idx)));
         end
 
-        % address leaving queue
-        queue = location(idx);
-        neighbors = find(location == queue);
+        if eventType(idx) == 1 
+            % address leaving queue
+            queue = location(idx);
+            neighbors = find(location == queue);
 
-        if t > warmup
-            cumLength = cumLength + currLengths*(t-lastT);
-        end
-
-        if ~isempty(neighbors)
-            position(neighbors) = max(0, position(neighbors) - 1); 
-            nextUp = neighbors(find(position(neighbors)==1));
+            if t > warmup
+                cumLength = cumLength + currLengths*(t-lastT);
+            end
+            
+            if ~isempty(neighbors)
+                position(neighbors) = max(0, position(neighbors) - 1); 
+                nextUp = neighbors(find(position(neighbors)==1));
         
-            if ~isempty(nextUp)         % should always be non-empty...
-                if queue > numCentral
-                    nextService = ...
-                        exprnd(1/compositionEffect(teamFam(queue- ...
-                               numCentral),teamSize(queue-numCentral),S(queue),compParams));
-                else
-                    nextService = exprnd(1/S(queue));
+                if ~isempty(nextUp)         % should always be non-empty...
+                    if queue > numCentral
+                        nextService = ...
+                            exprnd(1/compositionEffect(teamFam(queue- ...
+                                                               numCentral),teamSize(queue-numCentral),S(queue),compParams));
+                    else
+                        nextService = exprnd(1/S(queue));
+                    end
+                    eventList(nextUp) = t + nextService; 
+                    eventType(nextUp) = 1;
+                    
+                    % Add up server metrics
+                    if t > warmup
+                        busy(queue) = busy(queue) + nextService;
+                        numServed(queue) = numServed(queue) + 1;
+                        tmpWait = (t - enterTime(nextUp) + nextService);
+                        cumWaitTime(queue) = cumWaitTime(queue) + tmpWait;
+                        waitFilt(queue) = (1-dispatchParams.forgetFactor)*waitFilt(queue) ...
+                            + dispatchParams.forgetFactor*tmpWait;
+                    end
                 end
-                eventList(nextUp) = t + nextService; 
+            end
+            
+            % Address Entering queue (and routing)
+            tmp = unifrnd(0,1);
+            if length(size(P))>2    % many entity classes
+                                    % (pure, mixed)
+                nextP = P(class(idx),queue,class(idx),:);
+            else                    % only one class (strict prob)
+                nextP = P(queue,:);
+            end
+            
+            nextQueue = find(tmp < cumsum(nextP), 1, 'first');
+            destination(idx) = nextQueue;
+            
+            if queue > numCentral
+                tmp = queue - numCentral;
+            else
+                tmp2 = queue;
+            end
+
+            if nextQueue > numCentral
+                tmp = nextQueue - numCentral;
+            else
+                tmp2 = nextQueue;
+            end
+
+            eventList(idx) = t + dij(tmp,tmp2); % travel time
+            eventType(idx) = 2;
+
+            position(idx) = NaN;
+            location(idx) = NaN;
+            
+        else                            % travel event
+            enterTime(idx) = t;
+            neighbors = find(location == destination(idx));
+
+            location(idx) = destination(idx);
+            destination(idx) = NaN;
+            
+            if isempty(neighbors)           % Start service right away
+                position(idx) = 1;
+                if nextQueue > numCentral   % remote site (with team effects)
+                    nextService = ...
+                        exprnd(1/compositionEffect(teamFam(nextQueue-numCentral),teamSize(nextQueue-numCentral),S(nextQueue),compParams));                
+                else                        % central site
+                    nextService = exprnd(1/S(nextQueue));
+                end
+
+                eventList(idx) = t + nextService;
+                eventType(idx) = 1;
             
                 % Add up server metrics
                 if t > warmup
-                    busy(queue) = busy(queue) + nextService;
-                    numServed(queue) = numServed(queue) + 1;
-                    tmpWait = (t - enterTime(nextUp) + nextService);
-                    cumWaitTime(queue) = cumWaitTime(queue) + tmpWait;
-                    waitFilt(queue) = (1-dispatchParams.forgetFactor)*waitFilt(queue) ...
-                                        + dispatchParams.forgetFactor*tmpWait;
+                    busy(nextQueue) = busy(nextQueue) + nextService;
+                    numServed(nextQueue) = numServed(nextQueue) + 1;
+                    tmpWait = (t - enterTime(idx) + nextService);
+                    cumWaitTime(nextQueue) = cumWaitTime(nextQueue) + tmpWait;
+                    % waitFilt(nextQueue) = (1-forgetFactor)*waitFilt(nextQueue) ...
+                    %                       + forgetFactor*tmpWait;
                 end
+            else                            % get in line
+                position(idx) = max(position(neighbors)) + 1;
             end
         end
-        
-        % Address Entering queue (and routing)
-        tmp = unifrnd(0,1);
-        if length(size(P))>2    % many entity classes
-                                % (pure, mixed)
-            nextP = P(class(idx),queue,class(idx),:);
-        else                    % only one class (strict prob)
-            nextP = P(queue,:);
+
+        if DEBUG == 2
+            figure(1);
+            plot(t, teamSize(1), 'b.')
+            hold on;
         end
-
-        nextQueue = find(tmp < cumsum(nextP), 1, 'first');
-        % disp(sprintf('Class: %d; Leaving %d, entering %d\n', ...
-        %              class(idx),queue,nextQueue));
-        % input('Next');
-            
-        enterTime(idx) = t;
-        
-        neighbors = find(location == nextQueue);
-        location(idx) = nextQueue;
-
-        if isempty(neighbors)           % Start service right away
-            position(idx) = 1;
-            if nextQueue > numCentral   % remote site (with team effects)
-                nextService = ...
-                    exprnd(1/compositionEffect(teamFam(nextQueue-numCentral),teamSize(nextQueue-numCentral),S(nextQueue),compParams));                
-            else                        % central site
-                nextService = exprnd(1/S(nextQueue));
-            end
-
-            eventList(idx) = t + nextService;
-            
-            % Add up server metrics
-            if t > warmup
-                busy(nextQueue) = busy(nextQueue) + nextService;
-                numServed(nextQueue) = numServed(nextQueue) + 1;
-                tmpWait = (t - enterTime(idx) + nextService);
-                cumWaitTime(nextQueue) = cumWaitTime(nextQueue) + tmpWait;
-                % waitFilt(nextQueue) = (1-forgetFactor)*waitFilt(nextQueue) ...
-                %                       + forgetFactor*tmpWait;
-            end
-        else                            % get in line
-            position(idx) = max(position(neighbors)) + 1;
-        end
-        
-        %        figure(1);
-        %        plot(t, teamSize(1), 'b.')
-        %        hold on;
     end
     
     % Calculate performance metrics for run;

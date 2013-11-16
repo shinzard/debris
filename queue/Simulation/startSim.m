@@ -5,6 +5,7 @@
 % 
 % Last Modified: 4 Nov 2013
 % 
+clear all;
 
 % Parameters
 dispatchParams.method = 'Bounded';      % {'Fixed', 'Bounded'}
@@ -16,7 +17,7 @@ compParams.deltaA = 1;                  % composition effect
 compParams.deltaN = 1;                  % composition effect
 
 % DoE
-reps = 1;                             % number of replications
+reps = 100;                             % number of replications
 duration = 60;                          % hours
 
 % Network topology
@@ -26,11 +27,11 @@ type = [1 1 2 2 2 2 2 2];               % NOTE: simulateQ assumes
                                         % are listed first (type=1)
 % Travel times (hrs)
 dij = [0.47 0.47; ...
-      0.38 0.38; ...
-      0.50 0.50; ...
-      0.65 0.65; ...
-      0.47 0.47; ...
-      0.85 0.85];
+       0.38 0.38; ...
+       0.50 0.50; ...
+       0.65 0.65; ...
+       0.47 0.47; ...
+       0.85 0.85];
 
 numDrts = sum(type==2);
 numTrucks = 24;
@@ -55,19 +56,19 @@ priceOpt = [1 1 1 1 1 1; ...              % uniform
 
 run = 1;
 for temp = [0.73, 0.2]
-    dispatchParams.T = temp;            % level of rationality
+    dispatchParams.T = temp            % level of rationality
 
     for p = 1:3
-        prices = priceOpt(p,:);         % prices
+        prices = priceOpt(p,:)         % prices
     
-        % Allocate memory
-        throughput = zeros(1,numDrts*reps);
-
         for i = 1:reps
+            fprintf('.');
             [u,w,q,x] =  simulateQ(N, mus, type, -1, dij, dispatchParams, ...
-                                   compParams, pr, 60, 0)
+                                   compParams, pr, 60, 0);
             
-            throughput(run) = sum(x);
+            throughput(run) = sum(x(find(type==1)));
+            T(run) = temp;
+            priceStrategy(run) = p;
             run = run + 1;
         end
     end
