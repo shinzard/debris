@@ -10,7 +10,7 @@
 %
 %   Inputs:
 %     N - initial vector of entities by routing class (length = # parallel cycles)
-%     S - vector of mean service times
+%     S - vector of mean service rates
 %     P - routing probability vector (0 if determinstic routing by
 %     class, -1 for dispatcher routing)
 %     (DISPATCH/COMP)PARAMS - parameters to be passed on
@@ -24,11 +24,11 @@
 % Last Modified: 12 Nov. 2013
 
 function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, remoteP, ...
-                               T, warmup)
+                               T, warmup, prices)
 
     if nargin < 7
-        T = 5000;                      % same units as S
-        warmup = 1000;                 % same units as S
+        T = 5000;                      % same units as 1/S
+        warmup = 1000;                 % same units as 1/S
     end
     
     DEBUG = 0;
@@ -40,31 +40,45 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
                                         % travel, 3 == dispatch
     t = 0;                              % current simulation time
     lastT = 0;                          % last sim. time
-    cumHist = zeros(sum(N),sum(N));
-    today = zeros(sum(N),sum(N));
+    cumHist = zeros(sum(N),sum(N));     % for familiarity
+                                        % calculation 
+    today = zeros(sum(N),sum(N));       % today's experience matrix 
 
     % initialization of server metrics
-    numStations = size(S,2);
-    numCentral = length(find(type==1));
+    numStations = size(S,2);            % total number of queues
+    numCentral = length(find(type==1)); % number of central queues 
     busy = zeros(1,numStations);        % busy counter for each
                                         % server
     % Team attribute vectors
     teamFam = zeros(1,numStations-numCentral);
     teamSize = zeros(1,numStations-numCentral);
 
-    % Allocate metrics, filter variables
-    numServed = zeros(1,numStations);
-    cumWaitTime = zeros(1,numStations);
-    cumLength = zeros(1,numStations);
-    currLengths = zeros(1,numStations);
-    waitFilt = S;                       % initialize with expected
-                                        % service times
+    % Allocate server metrics, filter variables
+    numServed = zeros(1,numStations);   % count of entities served
+                                        % by each queue
+    cumWaitTime = zeros(1,numStations); % cumulative wait time
+                                        % experienced at each queue
+    cumLength = zeros(1,numStations);   % cumulative length at each
+                                        % queue 
+    currLengths = zeros(1,numStations); % current lengths at each
+                                        % queue 
+    waitFilt = 2*dij;                   % initialize with expected
+                                        % 2 * travel time
     
     % initialization of entity variables
-    class = ones(1,sum(N));
-    enterTime = zeros(1,sum(N));
+    class = ones(1,sum(N));             % allocation
+    enterTime = zeros(1,sum(N));        % time entered current
+                                        % queue 
+    lastParallelT = zeros(1,sum(N));    % last time left parallel
+                                        % queue 
+    lastParallelQ = zeros(1,sum(N));    % last parallel queue 
+    lastCentralQ = zeros(1,sum(N));     % last central queue 
+    location = NaN.*zeros(1,sum(N));    % current queue ID
+    destination = NaN.*zeros(1,sum(N)); % vector to store
+                                        % destination for
+                                        % travelling entities
     
-    if length(N)>1 %P == 0                           % deterministic routing
+    if length(N)>1 %P == 0              % deterministic routing
         tmp = 1;
         classType = 1;
 
@@ -92,11 +106,6 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
 
         end
     end
-
-    location = NaN.*zeros(1,sum(N));    % queue ID
-    destination = NaN.*zeros(1,sum(N)); % vector to store
-                                        % destination for
-                                        % travelling entities
 
     if length(N)>1
         for i = 1:length(N)             % for each class, find
@@ -132,13 +141,17 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
     eventType(end) = 3;
 
     % ----------------------------------------
-    % RUN SIMULATION
+    % MAIN SIMULATION LOOP
     % ----------------------------------------
     while t < T
-        %        class
-        %        eventList
-        %        position
-        %        currLengths
+        if DEBUG == 3
+            class
+            eventList
+            position
+            currLengths
+            waitFilt
+        end
+
         % Update familiarity
         [teamFam,teamSize,cumHist,today] = familiarity(t, lastT, cumHist, today, ...
                                             class,teamFam);
@@ -154,7 +167,8 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
         eventList(idx) = NaN;
         
         if idx == sum(N)+1              % dispatcher event
-            class = dispatcher(class, dispatchParams, waitFilt); % reallocate
+            class = dispatcher(class, location, dispatchParams, ...
+                               prices, waitFilt, numCentral, remoteP); % reallocate
 
             % Set next dispatcher decision
             eventList(end) = t + exprnd(1/dispatchParams.inter);
@@ -164,20 +178,42 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
         
         % For debuggins....
         if idx == 24 && DEBUG
-            disp(sprintf('t = %2.2f; type: %d; dest: %d; location: %d; pos: %d, class: %d',t, eventType(idx), destination(idx), location(idx), ... 
-                         position(idx), class(idx)));
+            try
+            disp(sprintf('t = %2.2f\t type: %d\t dest: %d\t location: %d\t pos:   %d\t class: %d\t lastParallelQ/T: %d / %2.2f\t lastCentralQ: %d\t filt: %2.2f',t, eventType(idx), destination(idx), location(idx), ...  
+                         position(idx), class(idx), lastParallelQ(idx), ...
+                         lastParallelT(idx), lastCentralQ(idx), ...
+                         waitFilt(lastParallelQ(idx),lastCentralQ(idx))));
+            catch                       % initial data
+            end
         end
 
         if eventType(idx) == 1 
+
             % address leaving queue
             queue = location(idx);
+
+            if queue > numCentral       % finishing service at
+                                        % parallel queue
+                if lastParallelQ(idx) == (queue - numCentral)
+                    waitFilt(lastParallelQ(idx), lastCentralQ(idx)) = ...
+                        (1-dispatchParams.forgetFactor)*waitFilt(lastParallelQ(idx), lastCentralQ(idx)) ...
+                        + dispatchParams.forgetFactor*(t-lastParallelT(idx));
+                end
+                lastParallelT(idx) = t;
+                lastParallelQ(idx) = queue - numCentral;
+            else                        % finishing service at
+                                        % central queue
+                lastCentralQ(idx) = queue;
+            end
+
             neighbors = find(location == queue);
 
             if t > warmup
                 cumLength = cumLength + currLengths*(t-lastT);
             end
             
-            if ~isempty(neighbors)
+            if ~isempty(neighbors)      % start serving next
+                                        % waiting entity
                 position(neighbors) = max(0, position(neighbors) - 1); 
                 nextUp = neighbors(find(position(neighbors)==1));
         
@@ -198,8 +234,6 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
                         numServed(queue) = numServed(queue) + 1;
                         tmpWait = (t - enterTime(nextUp) + nextService);
                         cumWaitTime(queue) = cumWaitTime(queue) + tmpWait;
-                        waitFilt(queue) = (1-dispatchParams.forgetFactor)*waitFilt(queue) ...
-                            + dispatchParams.forgetFactor*tmpWait;
                     end
                 end
             end
@@ -214,6 +248,12 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
             end
             
             nextQueue = find(tmp < cumsum(nextP), 1, 'first');
+            
+            if isempty(nextQueue)
+                nextP = P(queue-2,queue,queue-2,:);
+                nextQueue = find(tmp < cumsum(nextP), 1, 'first');
+            end
+                
             destination(idx) = nextQueue;
             
             if queue > numCentral
@@ -259,8 +299,6 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
                     numServed(nextQueue) = numServed(nextQueue) + 1;
                     tmpWait = (t - enterTime(idx) + nextService);
                     cumWaitTime(nextQueue) = cumWaitTime(nextQueue) + tmpWait;
-                    % waitFilt(nextQueue) = (1-forgetFactor)*waitFilt(nextQueue) ...
-                    %                       + forgetFactor*tmpWait;
                 end
             else                            % get in line
                 position(idx) = max(position(neighbors)) + 1;
@@ -269,7 +307,7 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
 
         if DEBUG == 2
             figure(1);
-            plot(t, teamSize(1), 'b.')
+            plot(t, waitFilt(1), 'b.')
             hold on;
         end
     end

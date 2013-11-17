@@ -8,7 +8,7 @@
 %  
 function [fam,n,cumHist,today] = familiarity(t,lastT,oldCumhist,oldToday,class,oldFam)
 
-c = unique(class);                      % teams
+c = [1:length(oldFam)];                      % teams
 n = zeros(1,length(c));                 % team size
 teamHist = zeros(1,length(c));                 % team cumulative history
 
