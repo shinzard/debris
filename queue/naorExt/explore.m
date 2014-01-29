@@ -1,4 +1,4 @@
-function [maxToll,maxSToll, S, I, thruRatio] = explore(C,R,T,p,PLOT)
+function [tollRate,ns, indivRate, thru, socialRate, socialThru] = explore(C,R,T,mu, PLOT)
 
 if nargin < 5
     PLOT = 0;
@@ -61,12 +61,13 @@ addpath '~/Documents/MATLAB/queueing/inst'
 %T = 2;
 %p = 0.1;                                % open feedback probability
 
-mu = [6 4];
+%mu = [4 6];
 Prob = [0 1; 1 0];                         % equivalent closed network
 
 V = qnvisits(Prob);
 
-total = 30;
+%total = 150;
+total = 25;
 
 i = 1;
 U = zeros(2,total);
@@ -77,62 +78,68 @@ X = zeros(2,total);
 for N = 1:total
     [U(:,i), W(:,i), Q(:,i), X(:,i)] = qnclosed(N,1./mu,V);
     i = i + 1;
+    % TODO: add break when indiv loop profit negative...
 end
 
 throughput = X(1,:);
-netThroughput = throughput*(1-p);
+%netThroughput = throughput*(1-p);
 
-wait = sum(W)
-1/(1-p)
+wait = sum(W);
 
-indivProfit = (1/(1-p))*(R - wait*C) - T
-socialProfit = netThroughput.*(indivProfit + T) % include tolls
+%indivProfit = (1/(1-p))*(R - wait*C) - T
+indivProfit = (R - wait*C) - T;
+%socialProfit = netThroughput.*(indivProfit + T) % include tolls
                                                  % here?? to be
                                                  % consistent with
                                                  % Naor, YES
-toll = netThroughput*T;
+socialProfit = throughput.*(indivProfit + T);
+
+toll = throughput*T;
 
 if PLOT
     figure;
-    plot([1:total], 1/(1-p)*wait*C+T)
+    %    plot([1:total], 1/(1-p)*wait*C+T)
+    plot([1:total], wait*C+T)
     hold on;
+    set(gca, 'fontsize', 20);
     plot([1:total], socialProfit, 'g');
-    plot([1 total], 1/(1-p).*[R R], 'r--');
-    plot([1:total], toll, 'k')
-    plot([1:total], netThroughput, 'm')
-    legend({'Individual Cost', 'Social Benefit Rate', 'Indiv. Benefit', ...
-            'Toll Rate', 'NetThru'}, 'location', 'southwest');
-
+    %    plot([1 total], 1/(1-p).*[R R], 'r--');
+    plot([1 total], [R R], 'r--');
+    %plot([1:total], toll, 'k')
+    %    plot([1:total], netThroughput, 'm')
+    plot([1:total], throughput, 'm')
+    legend({'Individual Cost', 'Social Benefit Rate', 'Indiv. Benefit', ...    %'Toll Rate', 
+            'NetThru'}, 'location', 'northeast');
+    title('Performance Measures');
+    xlabel('Number of Customers');
     disp(sprintf('\t\t Num \t NetThru \t Social \t Indiv. \t `Tolls'));
 
     [val, idx] = max(socialProfit);
-    disp(sprintf('Social Optimum: %d \t %f \t %f \t %f \t %f', idx, netThroughput(idx), ...
+    disp(sprintf('Social Optimum: %d \t %f \t %f \t %f \t %f', idx, throughput(idx), ...
                  socialProfit(idx), indivProfit(idx), toll(idx)))
 
     idx = find(indivProfit>0, 1, 'last');
-    disp(sprintf('Indiv. Optimum: %d \t %f \t %f \t %f \t %f', idx, netThroughput(idx), ...
+    disp(sprintf('Indiv. Optimum: %d \t %f \t %f \t %f \t %f', idx, throughput(idx), ...
                  socialProfit(idx), indivProfit(idx), toll(idx)));
 end
 
-[val, idx] = max(socialProfit);
-maxSToll = indivProfit(idx);
-S = idx;
-tmp = netThroughput(idx);
-
+% OUTPUTS
 idx = find(indivProfit>0, 1, 'last');
-maxToll = toll(idx);
-I = idx;
-try
-    thruRatio = tmp/netThroughput(idx);
-catch
-    thruRatio = 0;
-end
+if ~isempty(idx)
+    tollRate = toll(idx);
+    ns = idx;
+    indivRate = indivProfit(idx)*throughput(idx);
+    thru = throughput(idx);
 
-if isempty(maxToll)
-    maxToll = 0;
-    I = 0;
+    [val, idx] = max(socialProfit);
+    socialRate = indivProfit(idx)*throughput(idx);
+    socialThru = throughput(idx);
+else
+    tollRate = 0;
+    ns = 0;
+    indivRate = 0;
+    thru = 0;
+    socialRate = 0;
+    socialThru = 0;
 end
-
-if isempty(thruRatio)
-    thruRatio = 0;
-end
+    
