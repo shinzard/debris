@@ -23,14 +23,9 @@
 % J.Brooks
 % Last Modified: 12 Nov. 2013
 
-function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, remoteP, ...
+function [u,w,q,x,m,s,f] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, remoteP, ...
                                T, warmup, prices)
 
-    if nargin < 7
-        T = 5000;                      % same units as 1/S
-        warmup = 1000;                 % same units as 1/S
-    end
-    
     DEBUG = 0;
     
     % simulation variables
@@ -40,6 +35,7 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
                                         % travel, 3 == dispatch
     t = 0;                              % current simulation time
     lastT = 0;                          % last sim. time
+    lastUpdate = 0;                     % last price update time
     cumHist = zeros(sum(N),sum(N));     % for familiarity
                                         % calculation 
     today = zeros(sum(N),sum(N));       % today's experience matrix 
@@ -77,6 +73,8 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
     destination = NaN.*zeros(1,sum(N)); % vector to store
                                         % destination for
                                         % travelling entities
+    muTmp = S(numCentral+1:end);
+
     
     if length(N)>1 %P == 0              % deterministic routing
         tmp = 1;
@@ -137,12 +135,20 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
     end
     
     % First dispatcher decision
-    eventList(end) = exprnd(dispatchParams.inter);
+    if strmatch(dispatchParams.method , 'Optimal')
+        eventList(end) = 12;
+    else
+        eventList(end) = exprnd(dispatchParams.inter);
+    end
     eventType(end) = 3;
 
     % ----------------------------------------
     % MAIN SIMULATION LOOP
     % ----------------------------------------
+    % figure(10); title('familiarity'); hold on;
+    % figure(20); title('mus'); hold on;
+    % figure(30); title('prices'); hold on;
+    
     while t < T
         if DEBUG == 3
             class
@@ -154,7 +160,46 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
 
         % Update familiarity
         [teamFam,teamSize,cumHist,today] = familiarity(t, lastT, cumHist, today, ...
-                                            class,teamFam);
+                                                       class,teamFam);
+
+        % Update prices and distances if needed
+        if (t - lastUpdate) > 12*7 % every week
+
+            for i = 1:length(muTmp)
+                muTmp(i) = compositionEffect(teamFam(i), ...
+                                             teamSize(i), ...
+                                             S(numCentral+i), ...
+                                             compParams);
+            end
+
+            if compParams.distRW
+                % random walk for travel times...
+                dij = max(0.01, dij + randn(6,2)*0.1);
+            end
+            
+            if dispatchParams.Update
+                %            noInequityL = equityLinesearch([S(1:numCentral),muTmp], ...
+                %                                           repmat[1/6,1,6], sum(N));% find zero
+                % inequity
+                % solution
+                weights = repmat(1/6,1,6);
+
+                %            weights = 4/(4-lambda)^2 + mus(2:4)./(mus(2:4)-lambda/3).^2;% from
+                % optimality
+                % conditions!
+
+                [ut,wt,qt,xt,et]=optimalAssignmentFixedProb([S(1:numCentral),muTmp], ...
+                                                            type, dij, ...
+                                                            weights, ...
+                                                            sum(N), 1, ...
+                                                            remoteP); 
+
+                prices = remoteP*wt(1:2)'+wt(3:end)'+sum(dij.*remoteP, 2);
+                prices = prices/sum(prices);
+            end
+
+            lastUpdate = t;
+        end
         
         for i = 1:numStations
             currLengths (i)= length(find(location == i));
@@ -167,12 +212,27 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
         eventList(idx) = NaN;
         
         if idx == sum(N)+1              % dispatcher event
+            for i = 1:length(muTmp)
+                muTmp(i) = compositionEffect(teamFam(i), ...
+                                             teamSize(i), ...
+                                             S(numCentral+i), ...
+                                             compParams);
+            end
+
             class = dispatcher(class, location, dispatchParams, ...
-                               prices, waitFilt, numCentral, remoteP); % reallocate
+                               prices, waitFilt, numCentral, remoteP, ...
+                               [S(1:numCentral), muTmp],type, dij, ...
+                               N, cumHist);
 
             % Set next dispatcher decision
-            eventList(end) = t + exprnd(1/dispatchParams.inter);
+            if strmatch(dispatchParams.method , 'Optimal')
+                eventList(end) = t + 12;
+            else
+                eventList(end) = t + exprnd(dispatchParams.inter);
+            end
+
             eventType(end) = 3;
+
             continue;
         end
         
@@ -222,7 +282,9 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
                         nextService = ...
                             exprnd(1/compositionEffect(teamFam(queue- ...
                                                                numCentral),teamSize(queue-numCentral),S(queue),compParams));
-                    else
+                    else                % no effect on central
+                                        % servers; could add
+                                        % Parkinson's here
                         nextService = exprnd(1/S(queue));
                     end
                     eventList(nextUp) = t + nextService; 
@@ -284,9 +346,12 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
             if isempty(neighbors)           % Start service right away
                 position(idx) = 1;
                 if nextQueue > numCentral   % remote site (with team effects)
-                    nextService = ...
-                        exprnd(1/compositionEffect(teamFam(nextQueue-numCentral),teamSize(nextQueue-numCentral),S(nextQueue),compParams));                
+                    nextService = exprnd(1/ ...
+                                         compositionEffect(teamFam(nextQueue-numCentral),teamSize(nextQueue- ...
+                                                                      numCentral),S(nextQueue),compParams));
                 else                        % central site
+                                            % (excluding
+                                            % Parkinson's for now)
                     nextService = exprnd(1/S(nextQueue));
                 end
 
@@ -317,3 +382,6 @@ function [u,w,q,x] = simulateQ(N, S, type, P, dij, dispatchParams, compParams, r
     w = cumWaitTime./numServed;
     q = cumLength./(T-warmup);
     x = numServed./(T-warmup);%u./S(1,:);
+    m = muTmp;
+    s = teamSize;
+    f = teamFam;

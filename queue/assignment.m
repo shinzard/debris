@@ -4,7 +4,7 @@
 % 18 Apr 2013
 % J.Brooks
 
-function x = assignment(history, optFlows)
+function x = assignment(history, optFlows, x0)
 
 numTrucks = size(history,1);
 numTeams = length(optFlows);
@@ -56,9 +56,17 @@ LB = zeros(1,numVars);
 UB = ones(1,numVars);
 
 % Need to replace with call to CPLEX...
-%x = quadprog(H,F,A,B,Aeq,Beq,LB,UB);
+%x = quadprog(H,F,[],[],Aeq,Beq,LB,UB);
 
 % CPLEX notes: need to ensure H is symmetric and psd...
-%delta = -min(min(H));
-H = 1/2*(H+H'); % + delta*eye(numVars)
-[x,fval,flag,output] = cplexmiqp(H,F,[],[],Aeq,Beq,[],[],[],[],[],repmat('B',1,numVars))
+delta = -min(min(H));
+H = 1/2*(H+H');% + delta*eye(numVars)
+opts = cplexoptimset('Display', 'iter', 'Diagnostics', 'off', 'MaxIter', ...
+                     3000, 'MaxNodes', 5000);
+
+[x,fval,flag,output] = cplexmiqp(H,F,[],[],Aeq,Beq,[],[],[],[],[], ...
+                                 repmat('B',1,numVars),x0, opts);
+%H
+
+%[x,fval,flag,output] = cplexmiqp(H,F,[],[],Aeq,Beq,[],[],[],LB,UB, ...
+%                                 [],x0, opts);

@@ -1,4 +1,4 @@
-function [Nvec, p] = routing(type, mu, d, f , N, METHOD)
+function Nvec = routingFixed(type, mu, d, f , N, METHOD, pr)
 %UNTITLED Summary of this function goes here
 %   Detailed explanation goes here
     chains = find(type == 1);
@@ -12,21 +12,22 @@ function [Nvec, p] = routing(type, mu, d, f , N, METHOD)
     centralL = zeros(1,numChains); 
     cycleL = zeros(1,numCycles); 
 
-    travelL = f.*d;
+    travelL = f.*sum(d.*pr,2)';
 
     for i=1:numChains
         % note that for finite-source, this is the *individual*
         % arrival rate, not the effective one...
-        centralFlow(i) = sum(f((i-1)*numCycles + 1:i* ...
-                               numCycles));
+        centralFlow(i) = sum(pr(:,i).*f');
+        
         switch(METHOD)
           case 1,                       % M/M/1
-            disp('M/M/1 approximation');
+                                        %disp('M/M/1 approximation');
             delta = centralFlow(i)/(mu(chains(i))-centralFlow(i));
             pk = 0;
             
           case 2,                       % M/M/1/N
             disp('FWR approximation');
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             pk = 0;
             if rho ~= 1
@@ -45,6 +46,7 @@ function [Nvec, p] = routing(type, mu, d, f , N, METHOD)
             
           case 3,                     % finite source
             disp('Finite source approximation');
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             a = zeros(1,N);
             for j = 1:N
@@ -56,6 +58,7 @@ function [Nvec, p] = routing(type, mu, d, f , N, METHOD)
 
           case 4,                       % D/M/1
             disp('D/M/1 approximation')
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             z = 0.5;
             oldZ = 0;
@@ -74,7 +77,7 @@ function [Nvec, p] = routing(type, mu, d, f , N, METHOD)
     for i = 1:numCycles
         % note that for finite-source, this is the *individual*
         % arrival rate, not the effective one...
-        cycleFlow(i) = sum(f(i:numCycles:end));
+        cycleFlow(i) = f(i); %sum(f(i:numCycles:end));
         
         switch(METHOD)
           case 1,                       % M/M/1
@@ -189,14 +192,13 @@ function [Nvec, p] = routing(type, mu, d, f , N, METHOD)
     % Rounding  (pure strategy)
     tmp = 1;
     Nvec = zeros(1,decisionVars);
-    for j = 1:numChains
-        for k = 1:numCycles
-            if cycleFlow(k) > 0 && centralFlow(j) > 0
-                Nvec(tmp) = travelL(tmp) + centralL(j)*(f(tmp)/ ...
-                                                        centralFlow(j)) ...
-                    + cycleL(k)*(f(tmp)/cycleFlow(k)); 
+    Nvec = travelL + cycleL;
+
+    for j = 1:decisionVars
+        for k = 1:numChains
+            if f(j) > 0 && centralFlow(k) > 0
+                Nvec(j) = Nvec(j) + centralL(k)*(f(j)*pr(j,k)/centralFlow(k));
             end
-            tmp = tmp + 1;
         end
     end
 
@@ -235,14 +237,5 @@ function [Nvec, p] = routing(type, mu, d, f , N, METHOD)
         error('bad rounding!!');
     end
     
-    p = zeros(numStations);
-    for j = 1:numChains
-        for k = 1:numCycles
-            idx = (j-1)*numCycles + k;
-            p(j, numChains+k) = f(idx)/centralFlow(j);
-            p(numChains+k, j) = f(idx)/cycleFlow(k);
-        end
-    end
-
 end
 

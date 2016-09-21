@@ -13,7 +13,7 @@ qcSpan(length(QCs)).day = [];
 qcSpan(length(QCs)).numTickets = [];
 
 disp('Generating QC Data...');
-
+  
 for i = 1:length(QCs)
     loadIdx = find(QC == QCs(i) & lat~=0 & lon~=0);
     

@@ -8,9 +8,9 @@
 %  
 function [fam,n,cumHist,today] = familiarity(t,lastT,oldCumhist,oldToday,class,oldFam)
 
-c = [1:length(oldFam)];                      % teams
+c = [1:length(oldFam)];                 % teams
 n = zeros(1,length(c));                 % team size
-teamHist = zeros(1,length(c));                 % team cumulative history
+teamHist = zeros(1,length(c));          % team cumulative history
 
 today = oldToday;
 cumHist = oldCumhist;
@@ -21,29 +21,26 @@ for i = 1:length(c)
     n(i) = length(find(class == c(i)));
 end
 
-
 if mod(lastT,12) < mod(t, 12)           % within same day
     for i = 1:length(c)
         idx = find(class == c(i));
         for j = 1:length(idx)
            for k = j+1:length(idx)
                today(idx(j), idx(k))= 1;
+               today(idx(k), idx(j))= 1; % necessary only for
+                                         % assignment problem (in
+                                         % dispatcher.m) 
            end
         end
     end
 
 % Update familiarity 
 else                                    % new day
-    % Accumulate today's history
+    % Accumulate today's history and reset
     cumHist = cumHist + today;
-
-    % Team sizes
-    for i = 1:length(c)
-        n(i) = length(find(class == c(i)));
-    end
-
+    today = zeros(size(today));
+    
     % Sum and scale by number of pairs between members and duration
-
     for i = 1:length(c)
         idx = find(class == c(i));
         for j = 1:length(idx)

@@ -1,6 +1,6 @@
 % this allows for fixed probabilistic routing from parallel to
 % central nodes via the input 'prob'
-function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
+function [u,w,q,x,exit] = optimalAssignmentFixedProb(mu,type,d,weights,N,METHOD,remoteP)
 
     chains = find(type == 1);
     numChains = length(chains);
@@ -11,16 +11,16 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
                        'Display', 'off');
 
     [x,fval, exit, output, lagrange] = ...
-        fmincon(@(x)throughput(x), repmat(0.0001,1,numChains*numCycles), [], ...
-                [], [], [],repmat(0,1,numChains*numCycles),[], ...
-                @(x)numEntities(x,mu,type,d,N,METHOD), options);
+        fmincon(@(x)throughput(x,weights), repmat(0.0001,1,numCycles), [], ...
+                [], [], [],repmat(0,1,numCycles),[], ...
+                @(x)numEntities(x,mu,type,d,N,METHOD,remoteP), options);
     
     centralFlow = zeros(1,numChains);
-    cycleFlow = zeros(1,numCycles);
+    cycleFlow = zeros(1,numCycles);     % this is now the same as DVs
     
     centralL = zeros(1,numChains);
     cycleL = zeros(1,numCycles);
-    travelL = sum(x.*d);
+    travelL = sum(x.*sum(d.*remoteP,2)'); %sum(x.*d);
     
     centralW = zeros(1,numChains);
     cycleW = zeros(1,numCycles);
@@ -38,16 +38,17 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
     for i=1:numChains
         % note that for finite-source, this is the *individual*
         % arrival rate, not the effective one...
-        centralFlow(i) = sum(x((i-1)*numCycles + 1:i* ...
-                               numCycles));
+        centralFlow(i) = sum(remoteP(:,i).*x');
+        
         switch(METHOD)
           case 1,                       % M/M/1
-            disp('M/M/1 approximation');
+                                        %disp('M/M/1 approximation');
             delta = centralFlow(i)/(mu(chains(i))-centralFlow(i));
             pk = 0;
             
           case 2,                       % M/M/1/N
             disp('FWR approximation');
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             pk = 0;
             if rho ~= 1
@@ -65,6 +66,7 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
             
           case 3,                     % finite source
             disp('Finite source approximation');
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             a = zeros(1,N);
             for j = 1:N
@@ -76,6 +78,7 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
 
           case 4,                       % D/M/1
             disp('D/M/1 approximation')
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             z = 0.5;
             oldZ = 0;
@@ -94,7 +97,7 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
     for i = 1:numCycles
         % note that for finite-source, this is the *individual*
         % arrival rate, not the effective one...
-        cycleFlow(i) = sum(x(i:numCycles:end));
+        cycleFlow(i) = x(i); %sum(x(i:numCycles:end));
 
         switch(METHOD)
           case 1,                       % M/M/1
@@ -167,16 +170,16 @@ function [u,w,q,x,exit] = optimalAssignment(mu,type,d,N,METHOD)
     end
     q = [centralL, cycleL, travelL];
     
-    disp(sprintf('System Throughput: %2.2f', sum(centralFlow)));
+    %    disp(sprintf('System Throughput: %2.2f', sum(centralFlow)));
 
 end
 
 
-function T = throughput(lambda)
-    T = -sum(lambda);
+function T = throughput(lambda, weights)
+    T = -sum(weights.*lambda);                   % negative to maximize!
 end
 
-function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
+function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD, remoteP)
 
     epsilon = 1e-6;                     % required to ensure
                                         % feasible solutions
@@ -190,17 +193,18 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
     
     centralL = 0;
     cycleL = 0;
-    travelL = sum(lambda.*d);
+    travelL = sum(lambda.*sum(d.*remoteP,2)');
 
     for i=1:numChains
-        centralFlow(i) = sum(lambda((i-1)*numCycles + 1:i* ...
-                                    numCycles));
+        centralFlow(i) = sum(remoteP(:,i).*lambda');
+
         switch(METHOD)
           case 1,                       % M/M/1
             delta = centralFlow(i)/(mu(chains(i))-centralFlow(i));
             pk = 0;
             
           case 2,                       % M/M/1/N
+            error('not implemented');
             pk = 0;
             rho = centralFlow(i)/mu(chains(i));
             N;
@@ -218,6 +222,7 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
             %            delta = Lq + rho*(1-pk);
 
           case 3,                       % finite-source
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             a = zeros(1,N);
             for j = 1:N
@@ -227,6 +232,7 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
             delta = p0*sum([1:N].*a);
 
           case 4,                       % D/M/1
+            error('not implemented');
             rho = centralFlow(i)/mu(chains(i));
             z = 0.5;
             oldZ = 0;
@@ -243,7 +249,7 @@ function [C, Ceq] = numEntities(lambda, mu, type, d, N, METHOD)
     
 
     for i = 1:numCycles
-        cycleFlow(i) = sum(lambda(i:numCycles:end));
+        cycleFlow(i) = lambda(i);%sum(lambda(i:numCycles:end));
 
         switch(METHOD)
           case 1,                       % M/M/1

@@ -6,7 +6,7 @@
 
 clear all;
 
-load DEBRIS_AL_COMPLETE
+load Data/DEBRIS_AL_COMPLETE
 %load DEBRIS_ANALSIS_AL_COMPLETE         % be sure to exclude
                                         % file < 18
 %%load DEBRIS_ANALSIS_AL_PEAK_19feb %for verification
@@ -48,7 +48,7 @@ duration = [40672:40817]; % Complete data set
 %duration = [40695:40720]; % original June data (exclude 40721 which
                           % has 10 trucks only?)
 
-teams = selectData(tickets, duration);
+[teams, sub] = selectData(tickets, duration);
 
 [performance,teamSize] = teamPerfMeasures(tickets,teams);
 
@@ -61,10 +61,10 @@ teams = selectData(tickets, duration);
 filename = ['CompleteData_NewMeasures_',num2str(now), '.csv']
 fid = fopen(filename, 'w+');            % create and overwrite data
 fprintf(fid, '%s\n', ['Team,Effectiveness,Efficiency,Inequality,Size,' ...
-              'Familiarity,Haul,MaxCap']);
-fprintf(fid, '%6.2f, %6.2f, %6.2f, %6.2f, %6.2f, %6.2f, %6.2f, %6.2f\n', [teams'; ...
+              'Familiarity,Haul,MaxCap,Sub']);
+fprintf(fid, '%d, %6.2f, %6.2f, %6.2f, %d, %6.2f, %6.2f, %6.2f, %d\n', [teams'; ...
         performance.eff; performance.ecy; performance.eq; teamSize; ...
-        familiarity; teamHaul; teamCapacity]);
+        familiarity; teamHaul; teamCapacity; sub]);
 fclose(fid);
 
 % ------------------------------

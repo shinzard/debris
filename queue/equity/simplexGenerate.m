@@ -2,6 +2,9 @@ addpath('../');
 clear all;
 close all;
 
+minFlowI = 1e6;
+minFlowIw = [];
+
 % Kobayashi and Gerla, 1983 (Example 1)
 mus = [4 2 1 0.5];
 type = [1 2 2 2];
@@ -26,6 +29,11 @@ for i = 1:N
             % Flows
             inequity(i,j) = sqrt(sum(((x./mean(x)-1).^2)));
             
+            if inequity(i,j) < minFlowI
+                minFlowIw = [w1(i,j),w2(i,j),w3(i,j)];
+                minFlowI = inequity(i,j);
+            end
+            
             % Wait
             inequity2(i,j) = sqrt(sum(((w(2:end)./mean(w(2:end))-1).^2)));
             
@@ -44,6 +52,6 @@ for i = 1:N
     end
 end
 
-save(['simplexResults-',num2str(NUM_ENTITIES),'_', datestr(now)]);
+%save(['simplexResults-',num2str(NUM_ENTITIES),'_', datestr(now)]);
 
-simplexPlot;
+%simplexPlot;

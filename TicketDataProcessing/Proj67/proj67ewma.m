@@ -1,10 +1,10 @@
 close all;
 clear all;
 
-PLOT = 1;
+PLOT = 0;
 LOOP = false;                               % 1 - use loop times
                                         % 0 - use travel times
-load DEBRIS_AL_COMPLETE
+load('../Data/DEBRIS_AL_COMPLETE')
 
 baseidx = find(project == 6 | project == 7);
 
@@ -38,7 +38,7 @@ drts = unique(drt);%eqData.QCDay;
 trucks = unique(truckId);
 
 % initialize variables
-alphas = 0.94; %linspace(0.001, 0.999); %[0.1, 0.5, 0.9];
+alphas = linspace(0.001, 0.999); %[0.1, 0.5, 0.9];
 betterCounter = zeros(1,length(alphas));% metric for choosing
                                         % alpha; higher is better!
 worseCounter = zeros(1,length(alphas));         

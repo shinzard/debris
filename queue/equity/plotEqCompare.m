@@ -9,3 +9,10 @@ xlabel('Inequity Measure of Service Rates');
 ylabel('Relative Total Throughput');
 
 legend({'Wait', 'Length', 'Flow'})
+
+figure, plot(optTOconvex, ItoConvex, 'b.');
+hold on;
+plot(flowEq, zeros(1,length(flowEq)), 'rs');
+title('Eff-Eq Tradeoff Midpoint');
+xlabel('System Throughput');
+ylabel('Flow Inequity');
